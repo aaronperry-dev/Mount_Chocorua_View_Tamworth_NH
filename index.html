@@ -474,6 +474,28 @@ function getElevationFt(props) {
   return null;
 }
 
+// USA Structures often has multiple building footprints per lot (house,
+// garage, shed) that all inherit the same street address from the parcel
+// join. This keeps just one row per real address -- the one at the highest
+// elevation -- rather than showing near-duplicate entries for the same
+// property. Rows with no address at all ("Address unknown") are left alone
+// since they aren't actually the same property just because the label matches.
+function dedupeByAddress(inputRows) {
+  const bestByAddress = new Map();
+  inputRows.forEach(r => {
+    const key = r.streetaddr === 'Address unknown' ? `unknown-${r.id}` : r.streetaddr.trim();
+    const existing = bestByAddress.get(key);
+    if (!existing) {
+      bestByAddress.set(key, r);
+    } else {
+      const currentElev = existing.elev ?? -Infinity;
+      const newElev = r.elev ?? -Infinity;
+      if (newElev > currentElev) bestByAddress.set(key, r);
+    }
+  });
+  return Array.from(bestByAddress.values());
+}
+
 function makeMarker(feature, latlng) {
   const elev = getElevationFt(feature.properties);
   const address = feature.properties[CONFIG.addressField] || 'Address unknown';
@@ -518,6 +540,8 @@ fetch(CONFIG.geojsonPath + "?v=" + Date.now())
       elev: getElevationFt(f.properties),
       feature: f
     })).filter(r => r.visible);  // only properties with a view of Chocorua
+
+    rows = dedupeByAddress(rows);
 
     elevationAvailable = rows.some(r => r.elev !== null);
     setupElevationSlider();
