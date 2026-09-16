@@ -14,16 +14,16 @@
 
 <style>
   :root {
-    --bg: #f4f1e6;
+    --bg: #f1f0e2;
     --surface: #ffffff;
-    --ink: #262b22;
-    --ink-soft: #5e6659;
-    --line: #dad4c0;
-    --visible: #b8792f;
-    --visible-soft: #f3e3c8;
-    --blocked: #4f6672;
-    --blocked-soft: #e3e8ea;
-    --accent: #6b7f5e;
+    --ink: #24301f;
+    --ink-soft: #5b6b54;
+    --line: #d9dcc6;
+    --green: #3f6b3a;
+    --green-soft: #e3ebda;
+    --accent: #6b8f5e;
+    --warn: #8a6f45;
+    --warn-soft: #ede4d0;
   }
 
   * { box-sizing: border-box; }
@@ -70,23 +70,6 @@
     border: 1px solid var(--line);
     border-radius: 8px;
     overflow: hidden;
-  }
-
-  .legend {
-    background: var(--surface);
-    padding: 0.5rem 0.7rem;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(38,43,34,0.18);
-    font-size: 0.82rem;
-    line-height: 1.6;
-  }
-  .legend span.swatch {
-    display: inline-block;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    margin-right: 6px;
-    position: relative;
-    top: 0px;
   }
 
   .panel {
@@ -173,15 +156,11 @@
     border-radius: 2px;
   }
 
-  .toggle-group { display: flex; align-items: center; gap: 0.55rem; }
-  .toggle-group input { width: 17px; height: 17px; accent-color: var(--accent); }
-  .toggle-group label { margin: 0; font-size: 0.92rem; color: var(--ink); font-weight: 400; }
-
   #elevWarning {
     display: none;
     font-size: 0.85rem;
-    color: var(--blocked);
-    background: var(--blocked-soft);
+    color: var(--warn);
+    background: var(--warn-soft);
     border-radius: 6px;
     padding: 0.6rem 0.8rem;
     margin-top: 0.9rem;
@@ -220,15 +199,47 @@
   tbody tr { cursor: pointer; }
   tbody tr:hover { background: var(--bg); }
 
-  .tag {
-    display: inline-block;
-    padding: 0.15rem 0.55rem;
-    border-radius: 20px;
-    font-size: 0.78rem;
-    font-weight: 500;
+  .basemap-control { position: relative; }
+  .basemap-toggle {
+    width: 34px; height: 34px;
+    background: var(--surface);
+    border: none;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(36,48,31,0.4);
+    font-size: 1.15rem;
+    line-height: 1;
+    color: var(--ink);
+    cursor: pointer;
   }
-  .tag.visible { background: var(--visible-soft); color: var(--visible); }
-  .tag.blocked { background: var(--blocked-soft); color: var(--blocked); }
+  .basemap-toggle:hover { background: var(--green-soft); }
+  .basemap-panel {
+    position: absolute;
+    top: 40px;
+    right: 0;
+    background: var(--surface);
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(36,48,31,0.32);
+    padding: 0.4rem 0;
+    min-width: 170px;
+  }
+  .basemap-panel-label {
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    padding: 0.3rem 0.9rem 0.35rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 0.2rem;
+  }
+  .basemap-option {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.85rem;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .basemap-option:hover { background: var(--green-soft); }
+  .basemap-option input { accent-color: var(--accent); margin: 0; }
 
   .table-scroll {
     max-height: 480px;
@@ -315,10 +326,74 @@ const CONFIG = {
 };
 
 const map = L.map('map', { scrollWheelZoom: true }).setView([43.86, -71.29], 12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors',
-  maxZoom: 19
-}).addTo(map);
+
+const basemaps = {
+  "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }),
+  "Esri Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics',
+    maxZoom: 19
+  }),
+  "Esri Topographic": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri — Source: Esri, USGS, NOAA',
+    maxZoom: 19
+  })
+};
+// Note: Google's map tiles require using their JS API under Google's own
+// terms of service -- there's no free, ToS-compliant way to hotlink raw
+// Google tiles the way OSM/Esri allow, so Esri's imagery and topo layers
+// are offered here as the satellite/terrain options instead.
+
+let currentBase = basemaps["OpenStreetMap"].addTo(map);
+
+function setBasemap(name) {
+  map.removeLayer(currentBase);
+  currentBase = basemaps[name].addTo(map);
+}
+
+const BasemapControl = L.Control.extend({
+  options: { position: 'topright' },
+  onAdd: function () {
+    const container = L.DomUtil.create('div', 'basemap-control');
+    const button = L.DomUtil.create('button', 'basemap-toggle', container);
+    button.type = 'button';
+    button.innerHTML = '☰';
+    button.setAttribute('aria-label', 'Choose basemap');
+
+    const panel = L.DomUtil.create('div', 'basemap-panel', container);
+    panel.style.display = 'none';
+
+    const label = L.DomUtil.create('div', 'basemap-panel-label', panel);
+    label.textContent = 'Basemap';
+
+    Object.keys(basemaps).forEach((name, i) => {
+      const option = L.DomUtil.create('label', 'basemap-option', panel);
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'basemap';
+      radio.value = name;
+      if (i === 0) radio.checked = true;
+      radio.addEventListener('change', () => setBasemap(name));
+      option.appendChild(radio);
+      option.appendChild(document.createTextNode(name));
+    });
+
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.disableScrollPropagation(container);
+
+    button.addEventListener('click', () => {
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', (e) => {
+      if (!container.contains(e.target)) panel.style.display = 'none';
+    });
+
+    return container;
+  }
+});
+map.addControl(new BasemapControl());
 
 L.marker(CONFIG.summitLatLng, {
   icon: L.divIcon({ className: '', html: '▲', iconSize: [20, 20] })
@@ -345,30 +420,28 @@ function getElevationFt(props) {
 }
 
 function makeMarker(feature, latlng) {
-  const visible = isVisible(feature.properties);
   const elev = getElevationFt(feature.properties);
   const address = feature.properties[CONFIG.addressField] || 'Address unknown';
   const town = feature.properties[CONFIG.townField] || '';
-  const viewText = visible ? 'Can see Mount Chocorua' : "Can't see Mount Chocorua";
-  const elevText = elev !== null ? `${Math.round(elev)} ft` : null;
+  const elevText = elev !== null ? `${Math.round(elev)} ft elevation` : null;
 
   const marker = L.circleMarker(latlng, {
     radius: 6,
     weight: 1,
     color: '#ffffff',
-    fillColor: visible ? '#b8792f' : '#4f6672',
+    fillColor: '#3f6b3a',
     fillOpacity: 0.9
   });
 
-  const summaryLine = [elevText, viewText].filter(Boolean).join(' · ');
+  const summaryLine = elevText || '';
 
   marker.bindTooltip(
-    `<strong>${address}</strong>${town ? ', ' + town : ''}<br>${summaryLine}`,
+    `<strong>${address}</strong>${town ? ', ' + town : ''}${summaryLine ? '<br>' + summaryLine : ''}`,
     { direction: 'top', offset: [0, -8], opacity: 0.95 }
   );
 
   marker.bindPopup(
-    `<strong>${address}</strong><br>${town}<br>${summaryLine}`
+    `<strong>${address}</strong><br>${town}${summaryLine ? '<br>' + summaryLine : ''}`
   );
 
   marker.on('mouseover', function () { this.setStyle({ radius: 9, weight: 2 }); });
