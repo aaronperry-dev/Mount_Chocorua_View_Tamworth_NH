@@ -190,7 +190,8 @@
     white-space: nowrap;
   }
   thead th:hover { color: var(--ink); }
-  thead th.sorted::after { content: " " attr(data-dir); font-size: 0.7rem; }
+  thead th::after { content: " ⇅"; opacity: 0.35; font-size: 0.7rem; }
+  thead th.sorted::after { content: " " attr(data-dir); font-size: 0.7rem; opacity: 1; }
   tbody td {
     padding: 0.55rem 0.7rem;
     border-bottom: 1px solid var(--line);
@@ -198,6 +199,10 @@
   }
   tbody tr { cursor: pointer; }
   tbody tr:hover { background: var(--bg); }
+  tbody tr.selected, tbody tr.selected:hover {
+    background: var(--green-soft);
+    box-shadow: inset 3px 0 0 var(--green);
+  }
 
   .basemap-control { position: relative; }
   .basemap-toggle {
@@ -295,7 +300,7 @@
     <table>
       <thead>
         <tr>
-          <th data-key="streetaddr">Address</th>
+          <th data-key="streetName">Address</th>
           <th data-key="elev">Elevation (ft)</th>
         </tr>
       </thead>
@@ -455,12 +460,23 @@ L.marker(CONFIG.summitLatLng, {
 }).bindTooltip("Mount Chocorua summit", { permanent: false }).addTo(map);
 
 let markersLayer = L.layerGroup().addTo(map);
+let markerById = {};
 let rows = [];
 let elevationAvailable = false;
 let sortKey = null, sortDir = 1;
+let selectedId = null;
 
 function isVisible(props) {
   return String(props[CONFIG.visibilityField]) === CONFIG.visibleValue;
+}
+
+// Splits "881 MOUNTAIN RD" into houseNumber 881 and streetName "MOUNTAIN RD"
+// so the Address column can sort by street rather than by leading digit.
+function parseAddress(address) {
+  const match = address.match(/^(\d+)\s+(.*)$/);
+  return match
+    ? { houseNumber: parseInt(match[1], 10), streetName: match[2] }
+    : { houseNumber: null, streetName: address };
 }
 
 function getElevationFt(props) {
@@ -496,19 +512,21 @@ function dedupeByAddress(inputRows) {
   return Array.from(bestByAddress.values());
 }
 
-function makeMarker(feature, latlng) {
+function makeMarker(feature, latlng, id) {
   const elev = getElevationFt(feature.properties);
   const address = feature.properties[CONFIG.addressField] || 'Address unknown';
   const town = feature.properties[CONFIG.townField] || '';
   const elevText = elev !== null ? `${Math.round(elev)} ft elevation` : null;
+  const isSelected = id === selectedId;
 
   const marker = L.circleMarker(latlng, {
-    radius: 6,
-    weight: 1,
-    color: '#ffffff',
+    radius: isSelected ? 9 : 6,
+    weight: isSelected ? 3 : 1,
+    color: isSelected ? '#24301f' : '#ffffff',
     fillColor: '#3f6b3a',
     fillOpacity: 0.9
   });
+  marker.rowId = id;
 
   const summaryLine = elevText || '';
 
@@ -521,10 +539,36 @@ function makeMarker(feature, latlng) {
     `<strong>${address}</strong><br>${town}${summaryLine ? '<br>' + summaryLine : ''}`
   );
 
-  marker.on('mouseover', function () { this.setStyle({ radius: 9, weight: 2 }); });
-  marker.on('mouseout', function () { this.setStyle({ radius: 6, weight: 1 }); });
+  marker.on('mouseover', function () {
+    if (this.rowId !== selectedId) this.setStyle({ radius: 9, weight: 2 });
+  });
+  marker.on('mouseout', function () {
+    if (this.rowId !== selectedId) this.setStyle({ radius: 6, weight: 1 });
+  });
+  marker.on('click', () => selectFeature(id));
 
   return marker;
+}
+
+// Shared selection used by both marker clicks and table row clicks, so
+// whichever one the person interacts with, the other stays in sync.
+function selectFeature(id) {
+  selectedId = id;
+
+  Object.values(markerById).forEach(m => {
+    const isSel = m.rowId === selectedId;
+    m.setStyle({
+      radius: isSel ? 9 : 6,
+      weight: isSel ? 3 : 1,
+      color: isSel ? '#24301f' : '#ffffff'
+    });
+  });
+
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    tr.classList.toggle('selected', tr.dataset.id == id);
+  });
+  const selectedRow = document.querySelector(`#tableBody tr[data-id="${id}"]`);
+  if (selectedRow) selectedRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 fetch(CONFIG.geojsonPath + "?v=" + Date.now())
@@ -535,6 +579,7 @@ fetch(CONFIG.geojsonPath + "?v=" + Date.now())
       lat: f.geometry.coordinates[1],
       lng: f.geometry.coordinates[0],
       streetaddr: f.properties[CONFIG.addressField] || 'Address unknown',
+      ...parseAddress(f.properties[CONFIG.addressField] || 'Address unknown'),
       town: f.properties[CONFIG.townField] || '',
       visible: isVisible(f.properties),
       elev: getElevationFt(f.properties),
@@ -621,8 +666,11 @@ function render() {
   const filtered = getFiltered();
 
   markersLayer.clearLayers();
+  markerById = {};
   filtered.forEach(r => {
-    makeMarker(r.feature, [r.lat, r.lng]).addTo(markersLayer);
+    const marker = makeMarker(r.feature, [r.lat, r.lng], r.id);
+    marker.addTo(markersLayer);
+    markerById[r.id] = marker;
   });
 
   document.getElementById('resultCount').innerHTML =
@@ -634,6 +682,11 @@ function render() {
 function renderTable(data) {
   if (sortKey) {
     data = [...data].sort((a, b) => {
+      if (sortKey === 'streetName') {
+        const cmp = (a.streetName || '').localeCompare(b.streetName || '');
+        if (cmp !== 0) return cmp * sortDir;
+        return ((a.houseNumber ?? 0) - (b.houseNumber ?? 0)) * sortDir;
+      }
       let av = a[sortKey], bv = b[sortKey];
       if (sortKey === 'elev') { av = av ?? -Infinity; bv = bv ?? -Infinity; }
       if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
@@ -650,14 +703,13 @@ function renderTable(data) {
   `).join('');
 
   tbody.querySelectorAll('tr').forEach(tr => {
+    if (tr.dataset.id == selectedId) tr.classList.add('selected');
     tr.addEventListener('click', () => {
       const row = rows.find(r => r.id == tr.dataset.id);
       map.flyTo([row.lat, row.lng], 16, { duration: 0.6 });
-      markersLayer.eachLayer(layer => {
-        if (Math.abs(layer.getLatLng().lat - row.lat) < 1e-9 && Math.abs(layer.getLatLng().lng - row.lng) < 1e-9) {
-          layer.openPopup();
-        }
-      });
+      const marker = markerById[row.id];
+      if (marker) marker.openPopup();
+      selectFeature(row.id);
     });
   });
 }
