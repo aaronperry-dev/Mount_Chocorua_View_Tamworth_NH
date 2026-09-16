@@ -333,8 +333,8 @@ const legend = L.control({ position: 'bottomright' });
 legend.onAdd = function () {
   const div = L.DomUtil.create('div', 'legend');
   div.innerHTML =
-    '<span class="swatch" style="background:#b8792f"></span>Visible from summit<br>' +
-    '<span class="swatch" style="background:#4f6672"></span>Not visible';
+    '<span class="swatch" style="background:#b8792f"></span>Can see Mt. Chocorua<br>' +
+    '<span class="swatch" style="background:#4f6672"></span>Can\'t see Mt. Chocorua';
   return div;
 };
 legend.addTo(map);
@@ -361,20 +361,38 @@ function getElevationFt(props) {
 
 function makeMarker(feature, latlng) {
   const visible = isVisible(feature.properties);
-  return L.circleMarker(latlng, {
+  const elev = getElevationFt(feature.properties);
+  const address = feature.properties[CONFIG.addressField] || 'Address unknown';
+  const town = feature.properties[CONFIG.townField] || '';
+  const viewText = visible ? 'Can see Mount Chocorua' : "Can't see Mount Chocorua";
+  const elevText = elev !== null ? `${Math.round(elev)} ft` : null;
+
+  const marker = L.circleMarker(latlng, {
     radius: 6,
     weight: 1,
     color: '#ffffff',
     fillColor: visible ? '#b8792f' : '#4f6672',
     fillOpacity: 0.9
-  }).bindPopup(
-    `<strong>${feature.properties[CONFIG.addressField] || 'Address unknown'}</strong><br>` +
-    `${feature.properties[CONFIG.townField] || ''}<br>` +
-    (visible ? 'Visible from the summit' : 'Not visible from the summit')
+  });
+
+  const summaryLine = [elevText, viewText].filter(Boolean).join(' · ');
+
+  marker.bindTooltip(
+    `<strong>${address}</strong>${town ? ', ' + town : ''}<br>${summaryLine}`,
+    { direction: 'top', offset: [0, -8], opacity: 0.95 }
   );
+
+  marker.bindPopup(
+    `<strong>${address}</strong><br>${town}<br>${summaryLine}`
+  );
+
+  marker.on('mouseover', function () { this.setStyle({ radius: 9, weight: 2 }); });
+  marker.on('mouseout', function () { this.setStyle({ radius: 6, weight: 1 }); });
+
+  return marker;
 }
 
-fetch(CONFIG.geojsonPath)
+fetch(CONFIG.geojsonPath + "?v=" + Date.now())
   .then(res => res.json())
   .then(data => {
     rows = data.features.map((f, i) => ({
@@ -494,7 +512,7 @@ function renderTable(data) {
     <tr data-id="${r.id}">
       <td>${r.streetaddr}</td>
       <td>${r.elev !== null ? Math.round(r.elev) : '—'}</td>
-      <td><span class="tag ${r.visible ? 'visible' : 'blocked'}">${r.visible ? 'Visible' : 'Blocked'}</span></td>
+      <td><span class="tag ${r.visible ? 'visible' : 'blocked'}">${r.visible ? 'Has view' : 'No view'}</span></td>
     </tr>
   `).join('');
 
