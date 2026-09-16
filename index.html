@@ -291,6 +291,14 @@
           <input type="range" id="maxElev" step="1">
         </div>
       </div>
+      <div class="filter-group" style="flex: 1 1 240px;">
+        <label>Radius from summit <span class="elev-readout" id="distReadout">–</span></label>
+        <div class="range-slider">
+          <div class="range-track"></div>
+          <div class="range-fill" id="distFill"></div>
+          <input type="range" id="maxDist" step="0.1">
+        </div>
+      </div>
     </div>
     <div id="elevWarning">No elevation values were found in this dataset yet, so the elevation filter is inactive. See the note in the project README for how to add one.</div>
   </div>
@@ -302,6 +310,7 @@
         <tr>
           <th data-key="streetName">Address</th>
           <th data-key="elev">Elevation (ft)</th>
+          <th data-key="distanceMi">Distance (mi)</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -459,6 +468,25 @@ L.marker(CONFIG.summitLatLng, {
   icon: L.divIcon({ className: '', html: '▲', iconSize: [20, 20] })
 }).bindTooltip("Mount Chocorua summit", { permanent: false }).addTo(map);
 
+const radiusCircle = L.circle(CONFIG.summitLatLng, {
+  radius: 0,
+  color: '#6b8f5e',
+  weight: 1.5,
+  dashArray: '4 4',
+  fillColor: '#6b8f5e',
+  fillOpacity: 0.06
+}).addTo(map);
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // Earth's radius in miles
+  const toRad = deg => deg * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 let markersLayer = L.layerGroup().addTo(map);
 let markerById = {};
 let rows = [];
@@ -583,6 +611,10 @@ fetch(CONFIG.geojsonPath + "?v=" + Date.now())
       town: f.properties[CONFIG.townField] || '',
       visible: isVisible(f.properties),
       elev: getElevationFt(f.properties),
+      distanceMi: haversineMiles(
+        f.geometry.coordinates[1], f.geometry.coordinates[0],
+        CONFIG.summitLatLng[0], CONFIG.summitLatLng[1]
+      ),
       feature: f
     })).filter(r => r.visible);  // only properties with a view of Chocorua
 
@@ -590,6 +622,7 @@ fetch(CONFIG.geojsonPath + "?v=" + Date.now())
 
     elevationAvailable = rows.some(r => r.elev !== null);
     setupElevationSlider();
+    setupDistanceSlider();
     render();
   })
   .catch(err => {
@@ -636,6 +669,30 @@ function onSliderChange(e) {
   render();
 }
 
+function setupDistanceSlider() {
+  const distInput = document.getElementById('maxDist');
+  const maxDist = Math.ceil(Math.max(...rows.map(r => r.distanceMi)) * 10) / 10;
+  distInput.min = 0;
+  distInput.max = maxDist;
+  distInput.value = maxDist; // default: no radius restriction
+  updateDistanceVisual();
+  distInput.addEventListener('input', () => {
+    updateDistanceVisual();
+    render();
+  });
+}
+
+function updateDistanceVisual() {
+  const distInput = document.getElementById('maxDist');
+  const val = parseFloat(distInput.value);
+  const pct = (val / parseFloat(distInput.max)) * 100;
+  const fill = document.getElementById('distFill');
+  fill.style.left = '0%';
+  fill.style.width = pct + '%';
+  document.getElementById('distReadout').textContent = 'within ' + val.toFixed(1) + ' mi';
+  radiusCircle.setRadius(val * 1609.34);
+}
+
 function updateSliderVisual() {
   const minInput = document.getElementById('minElev');
   const maxInput = document.getElementById('maxElev');
@@ -655,9 +712,11 @@ function getFiltered() {
   const maxInput = document.getElementById('maxElev');
   const minVal = elevationAvailable ? parseFloat(minInput.value) : -Infinity;
   const maxVal = elevationAvailable ? parseFloat(maxInput.value) : Infinity;
+  const maxDistVal = parseFloat(document.getElementById('maxDist').value);
 
   return rows.filter(r => {
     if (elevationAvailable && r.elev !== null && (r.elev < minVal || r.elev > maxVal)) return false;
+    if (r.distanceMi > maxDistVal) return false;
     return true;
   });
 }
@@ -699,6 +758,7 @@ function renderTable(data) {
     <tr data-id="${r.id}">
       <td>${r.streetaddr}</td>
       <td>${r.elev !== null ? Math.round(r.elev) : '—'}</td>
+      <td>${r.distanceMi.toFixed(1)}</td>
     </tr>
   `).join('');
 
