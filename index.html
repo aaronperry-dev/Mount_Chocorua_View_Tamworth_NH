@@ -220,15 +220,17 @@
     border-radius: 6px;
     box-shadow: 0 2px 10px rgba(36,48,31,0.32);
     padding: 0.4rem 0;
-    min-width: 170px;
+    min-width: 190px;
+    max-height: 340px;
+    overflow-y: auto;
   }
   .basemap-panel-label {
     font-size: 0.72rem;
     color: var(--ink-soft);
-    padding: 0.3rem 0.9rem 0.35rem;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 0.2rem;
+    padding: 0.5rem 0.9rem 0.3rem;
+    margin-top: 0.2rem;
   }
+  .basemap-panel-label:first-child { margin-top: 0; }
   .basemap-option {
     display: flex;
     align-items: center;
@@ -327,24 +329,75 @@ const CONFIG = {
 
 const map = L.map('map', { scrollWheelZoom: true }).setView([43.86, -71.29], 12);
 
-const basemaps = {
-  "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19
-  }),
-  "Esri Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics',
-    maxZoom: 19
-  }),
-  "Esri Topographic": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri — Source: Esri, USGS, NOAA',
-    maxZoom: 19
-  })
-};
-// Note: Google's map tiles require using their JS API under Google's own
-// terms of service -- there's no free, ToS-compliant way to hotlink raw
-// Google tiles the way OSM/Esri allow, so Esri's imagery and topo layers
-// are offered here as the satellite/terrain options instead.
+const basemapGroups = [
+  {
+    label: "Street & reference",
+    layers: {
+      "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+      }),
+      "OpenStreetMap Humanitarian": L.tileLayer('https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        attribution: 'Tiles style by Humanitarian OpenStreetMap Team, data &copy; OpenStreetMap contributors',
+        maxZoom: 19
+      }),
+      "Esri Streets": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Esri, HERE, Garmin, USGS, NGA, FAO, NOAA',
+        maxZoom: 19, maxNativeZoom: 17
+      })
+    }
+  },
+  {
+    label: "Imagery & terrain",
+    layers: {
+      "Esri Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics',
+        maxZoom: 19
+      }),
+      "Esri Topographic": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Source: Esri, USGS, NOAA',
+        maxZoom: 19
+      }),
+      "Esri Terrain": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Source: USGS, Esri, TANA, DeLorme, NPS',
+        maxZoom: 19, maxNativeZoom: 13
+      }),
+      "Esri Shaded Relief": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri', maxZoom: 19, maxNativeZoom: 17
+      }),
+      "Esri Physical": L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Source: US National Park Service',
+        maxZoom: 19, maxNativeZoom: 10
+      }),
+      "OpenTopoMap": L.tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)',
+        maxZoom: 17
+      })
+    }
+  },
+  {
+    label: "Minimal & dark",
+    layers: {
+      "Esri Light Gray": L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri — Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
+        maxZoom: 19, maxNativeZoom: 16
+      }),
+      "CartoDB Positron": L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+        attribution: 'Map tiles &copy; CartoDB, CC BY 3.0 — Data &copy; OpenStreetMap contributors, ODbL',
+        maxZoom: 20
+      }),
+      "CartoDB Dark Matter": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+        attribution: 'Map tiles &copy; CartoDB, CC BY 3.0 — Data &copy; OpenStreetMap contributors, ODbL',
+        maxZoom: 20
+      })
+    }
+  }
+];
+
+const basemaps = Object.assign({}, ...basemapGroups.map(g => g.layers));
+// Note: Google's and Bing's map tiles require using their own JS APIs under
+// their respective terms of service -- there's no free, ToS-compliant way to
+// hotlink their raw tiles the way OSM/Esri/CartoDB allow, so they're left
+// out here. Esri's imagery/terrain layers cover the same ground legitimately.
 
 let currentBase = basemaps["OpenStreetMap"].addTo(map);
 
@@ -365,19 +418,21 @@ const BasemapControl = L.Control.extend({
     const panel = L.DomUtil.create('div', 'basemap-panel', container);
     panel.style.display = 'none';
 
-    const label = L.DomUtil.create('div', 'basemap-panel-label', panel);
-    label.textContent = 'Basemap';
+    basemapGroups.forEach(group => {
+      const label = L.DomUtil.create('div', 'basemap-panel-label', panel);
+      label.textContent = group.label;
 
-    Object.keys(basemaps).forEach((name, i) => {
-      const option = L.DomUtil.create('label', 'basemap-option', panel);
-      const radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = 'basemap';
-      radio.value = name;
-      if (i === 0) radio.checked = true;
-      radio.addEventListener('change', () => setBasemap(name));
-      option.appendChild(radio);
-      option.appendChild(document.createTextNode(name));
+      Object.keys(group.layers).forEach((name, i) => {
+        const option = L.DomUtil.create('label', 'basemap-option', panel);
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'basemap';
+        radio.value = name;
+        if (name === 'OpenStreetMap') radio.checked = true;
+        radio.addEventListener('change', () => setBasemap(name));
+        option.appendChild(radio);
+        option.appendChild(document.createTextNode(name));
+      });
     });
 
     L.DomEvent.disableClickPropagation(container);
