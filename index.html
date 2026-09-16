@@ -399,7 +399,7 @@ const basemaps = Object.assign({}, ...basemapGroups.map(g => g.layers));
 // hotlink their raw tiles the way OSM/Esri/CartoDB allow, so they're left
 // out here. Esri's imagery/terrain layers cover the same ground legitimately.
 
-let currentBase = basemaps["OpenStreetMap"].addTo(map);
+let currentBase = basemaps["OpenTopoMap"].addTo(map);
 
 function setBasemap(name) {
   map.removeLayer(currentBase);
@@ -428,7 +428,7 @@ const BasemapControl = L.Control.extend({
         radio.type = 'radio';
         radio.name = 'basemap';
         radio.value = name;
-        if (name === 'OpenStreetMap') radio.checked = true;
+        if (name === 'OpenTopoMap') radio.checked = true;
         radio.addEventListener('change', () => setBasemap(name));
         option.appendChild(radio);
         option.appendChild(document.createTextNode(name));
