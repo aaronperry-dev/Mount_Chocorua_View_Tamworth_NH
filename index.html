@@ -80,6 +80,39 @@
     margin-top: 1.25rem;
   }
 
+  .search-wrap { position: relative; margin-bottom: 1.1rem; }
+  .search-wrap input {
+    width: 100%;
+    padding: 0.6rem 2.3rem 0.6rem 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.92rem;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  .search-wrap input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .search-wrap button {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 0.25rem 0.4rem;
+    display: none;
+  }
+  .search-wrap button.visible { display: block; }
+  .search-wrap button:hover { color: var(--ink); }
+
   .filter-row {
     display: flex;
     flex-wrap: wrap;
@@ -281,6 +314,10 @@
   <div id="map"></div>
 
   <div class="panel">
+    <div class="search-wrap">
+      <input type="text" id="addressSearch" placeholder="Search by address or street…" autocomplete="off">
+      <button type="button" id="clearSearch" aria-label="Clear search">×</button>
+    </div>
     <div class="filter-row">
       <div class="filter-group" style="flex: 2 1 320px;">
         <label>Elevation range <span class="elev-readout" id="elevReadout">–</span></label>
@@ -471,9 +508,9 @@ L.marker(CONFIG.summitLatLng, {
 const radiusCircle = L.circle(CONFIG.summitLatLng, {
   radius: 0,
   color: '#c0392b',
-  weight: 2.0,
+  weight: 2,
   dashArray: '4 4',
-  fillColor: '#6b8f5e',
+  fillColor: '#c0392b',
   fillOpacity: 0.06
 }).addTo(map);
 
@@ -713,13 +750,28 @@ function getFiltered() {
   const minVal = elevationAvailable ? parseFloat(minInput.value) : -Infinity;
   const maxVal = elevationAvailable ? parseFloat(maxInput.value) : Infinity;
   const maxDistVal = parseFloat(document.getElementById('maxDist').value);
+  const searchTerm = document.getElementById('addressSearch').value.trim().toLowerCase();
 
   return rows.filter(r => {
     if (elevationAvailable && r.elev !== null && (r.elev < minVal || r.elev > maxVal)) return false;
     if (r.distanceMi > maxDistVal) return false;
+    if (searchTerm && !r.streetaddr.toLowerCase().includes(searchTerm)) return false;
     return true;
   });
 }
+
+const searchInput = document.getElementById('addressSearch');
+const clearSearchBtn = document.getElementById('clearSearch');
+searchInput.addEventListener('input', () => {
+  clearSearchBtn.classList.toggle('visible', searchInput.value.length > 0);
+  render();
+});
+clearSearchBtn.addEventListener('click', () => {
+  searchInput.value = '';
+  clearSearchBtn.classList.remove('visible');
+  render();
+  searchInput.focus();
+});
 
 function render() {
   const filtered = getFiltered();
