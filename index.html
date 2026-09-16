@@ -256,7 +256,7 @@
 
 <header>
   <h1>Which houses in Tamworth can see Mount Chocorua?</h1>
-  <p>Each point is a residential structure, checked for a direct line of sight to the summit against bare-earth terrain. Filter by elevation below to narrow the list.</p>
+  <p>Each point is a residential structure confirmed to have a direct line of sight to the summit against bare-earth terrain — properties without a view are not shown. Filter by elevation below to narrow the list.</p>
 </header>
 
 <main>
@@ -273,10 +273,6 @@
           <input type="range" id="maxElev" step="1">
         </div>
       </div>
-      <div class="filter-group toggle-group" style="flex: 0 0 auto;">
-        <input type="checkbox" id="visibleOnly">
-        <label for="visibleOnly">Only show properties with a view</label>
-      </div>
     </div>
     <div id="elevWarning">No elevation values were found in this dataset yet, so the elevation filter is inactive. See the note in the project README for how to add one.</div>
   </div>
@@ -288,7 +284,6 @@
         <tr>
           <th data-key="streetaddr">Address</th>
           <th data-key="elev">Elevation (ft)</th>
-          <th data-key="visible">View</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -328,16 +323,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 L.marker(CONFIG.summitLatLng, {
   icon: L.divIcon({ className: '', html: '▲', iconSize: [20, 20] })
 }).bindTooltip("Mount Chocorua summit", { permanent: false }).addTo(map);
-
-const legend = L.control({ position: 'bottomright' });
-legend.onAdd = function () {
-  const div = L.DomUtil.create('div', 'legend');
-  div.innerHTML =
-    '<span class="swatch" style="background:#b8792f"></span>Can see Mt. Chocorua<br>' +
-    '<span class="swatch" style="background:#4f6672"></span>Can\'t see Mt. Chocorua';
-  return div;
-};
-legend.addTo(map);
 
 let markersLayer = L.layerGroup().addTo(map);
 let rows = [];
@@ -404,7 +389,7 @@ fetch(CONFIG.geojsonPath + "?v=" + Date.now())
       visible: isVisible(f.properties),
       elev: getElevationFt(f.properties),
       feature: f
-    }));
+    })).filter(r => r.visible);  // only properties with a view of Chocorua
 
     elevationAvailable = rows.some(r => r.elev !== null);
     setupElevationSlider();
@@ -467,17 +452,14 @@ function updateSliderVisual() {
     Math.round(minInput.value) + ' – ' + Math.round(maxInput.value) + ' ft';
 }
 
-document.getElementById('visibleOnly').addEventListener('change', render);
 
 function getFiltered() {
-  const visibleOnly = document.getElementById('visibleOnly').checked;
   const minInput = document.getElementById('minElev');
   const maxInput = document.getElementById('maxElev');
   const minVal = elevationAvailable ? parseFloat(minInput.value) : -Infinity;
   const maxVal = elevationAvailable ? parseFloat(maxInput.value) : Infinity;
 
   return rows.filter(r => {
-    if (visibleOnly && !r.visible) return false;
     if (elevationAvailable && r.elev !== null && (r.elev < minVal || r.elev > maxVal)) return false;
     return true;
   });
@@ -492,7 +474,7 @@ function render() {
   });
 
   document.getElementById('resultCount').innerHTML =
-    `Showing <strong>${filtered.length}</strong> of ${rows.length} properties`;
+    `Showing <strong>${filtered.length}</strong> of ${rows.length} properties with a view`;
 
   renderTable(filtered);
 }
@@ -512,7 +494,6 @@ function renderTable(data) {
     <tr data-id="${r.id}">
       <td>${r.streetaddr}</td>
       <td>${r.elev !== null ? Math.round(r.elev) : '—'}</td>
-      <td><span class="tag ${r.visible ? 'visible' : 'blocked'}">${r.visible ? 'Has view' : 'No view'}</span></td>
     </tr>
   `).join('');
 
