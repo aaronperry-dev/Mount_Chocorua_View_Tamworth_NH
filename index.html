@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mount Chocorua Viewshed — Tamworth, NH</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,440;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+<style>
+  :root {
+    --bg: #f4f1e6;
+    --surface: #ffffff;
+    --ink: #262b22;
+    --ink-soft: #5e6659;
+    --line: #dad4c0;
+    --visible: #b8792f;
+    --visible-soft: #f3e3c8;
+    --blocked: #4f6672;
+    --blocked-soft: #e3e8ea;
+    --accent: #6b7f5e;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Work Sans', sans-serif;
+    line-height: 1.45;
+  }
+
+  header {
+    padding: 2rem 1.5rem 1.25rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 0.98rem;
+    max-width: 60ch;
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  #map {
+    height: 56vh;
+    min-height: 380px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .legend {
+    background: var(--surface);
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(38,43,34,0.18);
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+  .legend span.swatch {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    position: relative;
+    top: 0px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 1.1rem 1.3rem;
+    margin-top: 1.25rem;
+  }
+
+  .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-end;
+  }
+
+  .filter-group { flex: 1 1 260px; }
+
+  .filter-group label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    margin-bottom: 0.5rem;
+  }
+
+  .elev-readout {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--ink);
+  }
+
+  .range-slider {
+    position: relative;
+    height: 34px;
+  }
+  .range-slider input[type="range"] {
+    position: absolute;
+    width: 100%;
+    top: 12px;
+    margin: 0;
+    background: none;
+    pointer-events: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .range-slider input[type="range"]::-webkit-slider-thumb {
+    pointer-events: all;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--accent);
+    cursor: pointer;
+    margin-top: -6px;
+  }
+  .range-slider input[type="range"]::-moz-range-thumb {
+    pointer-events: all;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--accent);
+    cursor: pointer;
+  }
+  .range-slider input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+  .range-slider input[type="range"]::-moz-range-track { height: 4px; background: transparent; }
+
+  .range-track {
+    position: absolute;
+    top: 15px; left: 0; right: 0;
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+  }
+  .range-fill {
+    position: absolute;
+    top: 15px; height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  .toggle-group { display: flex; align-items: center; gap: 0.55rem; }
+  .toggle-group input { width: 17px; height: 17px; accent-color: var(--accent); }
+  .toggle-group label { margin: 0; font-size: 0.92rem; color: var(--ink); font-weight: 400; }
+
+  #elevWarning {
+    display: none;
+    font-size: 0.85rem;
+    color: var(--blocked);
+    background: var(--blocked-soft);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin-top: 0.9rem;
+  }
+
+  #resultCount {
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    margin: 1.1rem 0 0.6rem;
+  }
+  #resultCount strong { color: var(--ink); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+  thead th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--ink-soft);
+    font-size: 0.8rem;
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: var(--ink); }
+  thead th.sorted::after { content: " " attr(data-dir); font-size: 0.7rem; }
+  tbody td {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--bg); }
+
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  .tag.visible { background: var(--visible-soft); color: var(--visible); }
+  .tag.blocked { background: var(--blocked-soft); color: var(--blocked); }
+
+  .table-scroll {
+    max-height: 480px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .table-scroll table { border: none; }
+  .table-scroll thead th { position: sticky; top: 0; background: var(--surface); }
+
+  footer {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem 2.5rem;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Which houses in Tamworth can see Mount Chocorua?</h1>
+  <p>Each point is a residential structure, checked for a direct line of sight to the summit against bare-earth terrain. Filter by elevation below to narrow the list.</p>
+</header>
+
+<main>
+  <div id="map"></div>
+
+  <div class="panel">
+    <div class="filter-row">
+      <div class="filter-group" style="flex: 2 1 320px;">
+        <label>Elevation range <span class="elev-readout" id="elevReadout">–</span></label>
+        <div class="range-slider">
+          <div class="range-track"></div>
+          <div class="range-fill" id="rangeFill"></div>
+          <input type="range" id="minElev" step="1">
+          <input type="range" id="maxElev" step="1">
+        </div>
+      </div>
+      <div class="filter-group toggle-group" style="flex: 0 0 auto;">
+        <input type="checkbox" id="visibleOnly">
+        <label for="visibleOnly">Only show properties with a view</label>
+      </div>
+    </div>
+    <div id="elevWarning">No elevation values were found in this dataset yet, so the elevation filter is inactive. See the note in the project README for how to add one.</div>
+  </div>
+
+  <p id="resultCount"></p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="streetaddr">Address</th>
+          <th data-key="elev">Elevation (ft)</th>
+          <th data-key="visible">View</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<footer>
+  Structure locations: USA Structures (FEMA/ORNL). Parcel addresses: NH GRANIT parcel mosaic. Visibility computed from a bare-earth USGS 3DEP DEM, line-of-sight from the Chocorua summit at standing eye height.
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+// =====================================================================
+// CONFIG — adjust these if your GeoJSON's filename or field names differ
+// =====================================================================
+const CONFIG = {
+  geojsonPath: "Tamworth_NH_Mt_Chocorua_Visibility_WGS84.geojson",
+  addressField: "streetaddr",
+  townField: "town",
+  visibilityField: "vis_dem_bareearth_chocorua_summit_1",
+  visibleValue: "255",
+  // First of these fields found with a real value wins. Fields ending in
+  // "_m" are treated as meters and converted to feet for display.
+  elevationFieldCandidates: ["elev_ft", "elevation_ft", "elev_m", "H_ADJ_ELEV", "ELEVATION"],
+  summitLatLng: [43.9543, -71.2734]
+};
+
+const map = L.map('map', { scrollWheelZoom: true }).setView([43.86, -71.29], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(map);
+
+L.marker(CONFIG.summitLatLng, {
+  icon: L.divIcon({ className: '', html: '▲', iconSize: [20, 20] })
+}).bindTooltip("Mount Chocorua summit", { permanent: false }).addTo(map);
+
+const legend = L.control({ position: 'bottomright' });
+legend.onAdd = function () {
+  const div = L.DomUtil.create('div', 'legend');
+  div.innerHTML =
+    '<span class="swatch" style="background:#b8792f"></span>Visible from summit<br>' +
+    '<span class="swatch" style="background:#4f6672"></span>Not visible';
+  return div;
+};
+legend.addTo(map);
+
+let markersLayer = L.layerGroup().addTo(map);
+let rows = [];
+let elevationAvailable = false;
+let sortKey = null, sortDir = 1;
+
+function isVisible(props) {
+  return String(props[CONFIG.visibilityField]) === CONFIG.visibleValue;
+}
+
+function getElevationFt(props) {
+  for (const field of CONFIG.elevationFieldCandidates) {
+    const val = props[field];
+    if (val !== null && val !== undefined && val !== "" && !isNaN(parseFloat(val))) {
+      const num = parseFloat(val);
+      return field.endsWith("_m") ? num * 3.28084 : num;
+    }
+  }
+  return null;
+}
+
+function makeMarker(feature, latlng) {
+  const visible = isVisible(feature.properties);
+  return L.circleMarker(latlng, {
+    radius: 6,
+    weight: 1,
+    color: '#ffffff',
+    fillColor: visible ? '#b8792f' : '#4f6672',
+    fillOpacity: 0.9
+  }).bindPopup(
+    `<strong>${feature.properties[CONFIG.addressField] || 'Address unknown'}</strong><br>` +
+    `${feature.properties[CONFIG.townField] || ''}<br>` +
+    (visible ? 'Visible from the summit' : 'Not visible from the summit')
+  );
+}
+
+fetch(CONFIG.geojsonPath)
+  .then(res => res.json())
+  .then(data => {
+    rows = data.features.map((f, i) => ({
+      id: i,
+      lat: f.geometry.coordinates[1],
+      lng: f.geometry.coordinates[0],
+      streetaddr: f.properties[CONFIG.addressField] || 'Address unknown',
+      town: f.properties[CONFIG.townField] || '',
+      visible: isVisible(f.properties),
+      elev: getElevationFt(f.properties),
+      feature: f
+    }));
+
+    elevationAvailable = rows.some(r => r.elev !== null);
+    setupElevationSlider();
+    render();
+  })
+  .catch(err => {
+    document.getElementById('resultCount').textContent =
+      'Could not load ' + CONFIG.geojsonPath + ' — check the file is in the same folder and the name in CONFIG matches.';
+    console.error(err);
+  });
+
+function setupElevationSlider() {
+  const minInput = document.getElementById('minElev');
+  const maxInput = document.getElementById('maxElev');
+
+  if (!elevationAvailable) {
+    document.getElementById('elevWarning').style.display = 'block';
+    minInput.disabled = true;
+    maxInput.disabled = true;
+    document.getElementById('elevReadout').textContent = 'not available';
+    return;
+  }
+
+  const elevs = rows.map(r => r.elev).filter(e => e !== null);
+  const lo = Math.floor(Math.min(...elevs));
+  const hi = Math.ceil(Math.max(...elevs));
+
+  [minInput, maxInput].forEach(input => {
+    input.min = lo; input.max = hi;
+  });
+  minInput.value = lo;
+  maxInput.value = hi;
+
+  updateSliderVisual();
+  minInput.addEventListener('input', onSliderChange);
+  maxInput.addEventListener('input', onSliderChange);
+}
+
+function onSliderChange(e) {
+  const minInput = document.getElementById('minElev');
+  const maxInput = document.getElementById('maxElev');
+  if (parseFloat(minInput.value) > parseFloat(maxInput.value)) {
+    if (e.target === minInput) minInput.value = maxInput.value;
+    else maxInput.value = minInput.value;
+  }
+  updateSliderVisual();
+  render();
+}
+
+function updateSliderVisual() {
+  const minInput = document.getElementById('minElev');
+  const maxInput = document.getElementById('maxElev');
+  const lo = parseFloat(minInput.min), hi = parseFloat(minInput.max);
+  const minPct = ((minInput.value - lo) / (hi - lo)) * 100;
+  const maxPct = ((maxInput.value - lo) / (hi - lo)) * 100;
+  const fill = document.getElementById('rangeFill');
+  fill.style.left = minPct + '%';
+  fill.style.width = (maxPct - minPct) + '%';
+  document.getElementById('elevReadout').textContent =
+    Math.round(minInput.value) + ' – ' + Math.round(maxInput.value) + ' ft';
+}
+
+document.getElementById('visibleOnly').addEventListener('change', render);
+
+function getFiltered() {
+  const visibleOnly = document.getElementById('visibleOnly').checked;
+  const minInput = document.getElementById('minElev');
+  const maxInput = document.getElementById('maxElev');
+  const minVal = elevationAvailable ? parseFloat(minInput.value) : -Infinity;
+  const maxVal = elevationAvailable ? parseFloat(maxInput.value) : Infinity;
+
+  return rows.filter(r => {
+    if (visibleOnly && !r.visible) return false;
+    if (elevationAvailable && r.elev !== null && (r.elev < minVal || r.elev > maxVal)) return false;
+    return true;
+  });
+}
+
+function render() {
+  const filtered = getFiltered();
+
+  markersLayer.clearLayers();
+  filtered.forEach(r => {
+    makeMarker(r.feature, [r.lat, r.lng]).addTo(markersLayer);
+  });
+
+  document.getElementById('resultCount').innerHTML =
+    `Showing <strong>${filtered.length}</strong> of ${rows.length} properties`;
+
+  renderTable(filtered);
+}
+
+function renderTable(data) {
+  if (sortKey) {
+    data = [...data].sort((a, b) => {
+      let av = a[sortKey], bv = b[sortKey];
+      if (sortKey === 'elev') { av = av ?? -Infinity; bv = bv ?? -Infinity; }
+      if (typeof av === 'string') return av.localeCompare(bv) * sortDir;
+      return (av - bv) * sortDir;
+    });
+  }
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = data.map(r => `
+    <tr data-id="${r.id}">
+      <td>${r.streetaddr}</td>
+      <td>${r.elev !== null ? Math.round(r.elev) : '—'}</td>
+      <td><span class="tag ${r.visible ? 'visible' : 'blocked'}">${r.visible ? 'Visible' : 'Blocked'}</span></td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const row = rows.find(r => r.id == tr.dataset.id);
+      map.flyTo([row.lat, row.lng], 16, { duration: 0.6 });
+      markersLayer.eachLayer(layer => {
+        if (Math.abs(layer.getLatLng().lat - row.lat) < 1e-9 && Math.abs(layer.getLatLng().lng - row.lng) < 1e-9) {
+          layer.openPopup();
+        }
+      });
+    });
+  });
+}
+
+document.querySelectorAll('thead th').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (sortKey === key) { sortDir *= -1; } else { sortKey = key; sortDir = 1; }
+    document.querySelectorAll('thead th').forEach(t => t.classList.remove('sorted'));
+    th.classList.add('sorted');
+    th.dataset.dir = sortDir === 1 ? '▲' : '▼';
+    renderTable(getFiltered());
+  });
+});
+</script>
+</body>
+</html>
